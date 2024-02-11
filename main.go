@@ -6,8 +6,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -30,15 +31,17 @@ func main() {
 		log.Fatal("DB_URL is not found in the environment")
 	}
 
-	db, err := sql.Open("postgres", dbURL)
+	conn, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatal("Couldn't connect to database:", err)
 	}
 
-	dbQueries := database.New(db)
+	db := database.New(conn)
 	apiCfg := apiConfig{
-		DB: dbQueries,
+		DB: db,
 	}
+
+	go startScraping(db, 10, time.Minute)
 
 	router := chi.NewRouter()
 
@@ -61,9 +64,11 @@ func main() {
 	v1router.Post("/feeds", apiCfg.middlewareAuth(apiCfg.handlerFeedsCreate))
 	v1router.Get("/feeds", apiCfg.handlerGetFeeds)
 
+	v1router.Get("/posts", apiCfg.middlewareAuth(apiCfg.handlerGetPostsByUser))
+
 	v1router.Post("/feed_follows", apiCfg.middlewareAuth(apiCfg.handlerCreateFeedFollow))
 	v1router.Get("/feed_follows", apiCfg.middlewareAuth(apiCfg.handlerGetFeedFollows))
-	v1router.Delete("/feed_follows/{feedFollowID}", apiCfg.middlewareAuth(apiCfg.handlerDeleteFeedFollow))
+	v1router.Delete("/feed_follows/{feedFollowID}", apiCfg.middlewareAuth(apiCfg.handlerFeedFollowDelete))
 
 	router.Mount("/v1", v1router)
 

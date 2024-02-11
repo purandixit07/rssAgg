@@ -20,11 +20,11 @@ func (apiCfg *apiConfig) handlerFeedsCreate(w http.ResponseWriter, r *http.Reque
 	params := parameters{}
 	err := decoder.Decode(&params)
 	if err != nil {
-		respondWithError(w, 400, fmt.Sprintf("Error parsing json: %v", err))
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Error parsing json: %v", err))
 		return
 	}
 
-	feed, err := apiCfg.DB.CreateFeed(r.Context(), database.CreateFeedParams{
+	dbFeed, err := apiCfg.DB.CreateFeed(r.Context(), database.CreateFeedParams{
 		ID:        uuid.New(),
 		CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(),
@@ -34,9 +34,26 @@ func (apiCfg *apiConfig) handlerFeedsCreate(w http.ResponseWriter, r *http.Reque
 	})
 
 	if err != nil {
-		respondWithError(w, 400, fmt.Sprintf("Couldn't create feed: %v", err))
+		respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Couldn't create feed: %v", err))
 		return
 	}
 
-	respondWithJson(w, http.StatusCreated, databaseFeedToFeed(feed))
+	dbFeedFollow, err := apiCfg.DB.CreateFeedFollow(r.Context(), database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+		FeedID:    dbFeed.ID,
+		UserID:    user.ID,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create feed follow")
+		return
+	}
+	respondWithJson(w, http.StatusOK, struct {
+		feed       Feed
+		feedFollow FeedFollow
+	}{
+		feed:       databaseFeedToFeed(dbFeed),
+		feedFollow: databaseFeedFollowToFeedFollow(dbFeedFollow),
+	})
 }
